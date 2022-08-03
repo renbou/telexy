@@ -83,17 +83,6 @@ func (d Decoder) Int() (int, error) {
 	return int(i64), err
 }
 
-func (d Decoder) Float64() (float64, error) {
-	if n, err := d.number("a float"); err != nil {
-		return 0, err
-	} else if f, err := n.Float64(); err != nil {
-		i, _ := n.Int64()
-		return float64(i), nil
-	} else {
-		return f, nil
-	}
-}
-
 func newDecoder(d *json.Decoder) Decoder {
 	d.UseNumber()
 	return Decoder{d}

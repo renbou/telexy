@@ -29,6 +29,8 @@ func TestUpdateType_String(t *testing.T) {
 		{s: "my_chat_member", u: UpdateMyChatMember},
 		{s: "chat_member", u: UpdateChatMember},
 		{s: "chat_join_request", u: UpdateChatJoinRequest},
+		{s: "UpdateType(-1)", u: UpdateType(-1)},
+		{s: "UpdateType(14)", u: UpdateType(14)},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -127,6 +129,11 @@ func Test_getUpdatesResponseConsumer(t *testing.T) {
 		{
 			name:    "invalid update end structure",
 			data:    `[{"update_id":1, "message":{"text":"ok"}]`,
+			wantErr: true,
+		},
+		{
+			name:    "consumer returns error",
+			data:    `[{"update_id":1, "message":"bad}]`,
 			wantErr: true,
 		},
 	}

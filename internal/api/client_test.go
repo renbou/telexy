@@ -2,8 +2,11 @@ package api
 
 import (
 	"math/rand"
+	"net/http"
 	"path"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 const benchmarkSeed = 0x13337
@@ -49,4 +52,53 @@ func BenchmarkClient_methodURLNaive(b *testing.B) {
 		return urlCopy.String()
 	}
 	benchmarkMethodURL(b, f)
+}
+
+func TestNewClient(t *testing.T) {
+	tests := []struct {
+		name       string
+		endpoint   string
+		token      string
+		wantErr    bool
+		wantClient *http.Client
+	}{
+		{
+			name:     "invalid api endpoint",
+			endpoint: "bad endpoint\n\x00",
+			token:    "any",
+			wantErr:  true,
+		},
+		{
+			name:       "valid client creation",
+			endpoint:   "https://api.telegram.org",
+			token:      "bot-token",
+			wantClient: http.DefaultClient,
+		},
+		{
+			name:       "valid client creation with custom client",
+			endpoint:   "https://api.telegram.org",
+			token:      "bot-token",
+			wantClient: &http.Client{Transport: &http.Transport{ResponseHeaderTimeout: 1}},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := require.New(t)
+
+			var opts *ClientOpts
+			if tt.wantClient != nil && tt.wantClient != http.DefaultClient {
+				opts = &ClientOpts{tt.wantClient}
+			}
+			gotClient, err := NewClient(tt.endpoint, tt.token, opts)
+			if tt.wantErr {
+				req.Error(err)
+			} else {
+				req.NoError(err)
+				req.NotNil(gotClient)
+				req.Equal(tt.wantClient, gotClient.hc)
+			}
+		})
+	}
 }
