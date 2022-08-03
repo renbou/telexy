@@ -51,12 +51,13 @@ linters-settings:
     check-exported: false
   gocognit:
     min-complexity: 20
-  wrapcheck:
-    ignoreSigs:
-      - .Errorf(
-      - errors.New(
-      - status.Error(
-      - retry.Recoverable(
-      - retry.Unrecoverable(
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+        - gosec
+        - wrapcheck
 
 modules-download-mode: readonly

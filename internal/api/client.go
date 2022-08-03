@@ -40,24 +40,19 @@ type ClientOpts struct {
 	Client *http.Client
 }
 
-func NewClient(endpoint, token string, opts *ClientOpts) (*Client, error) {
-	endpointURL, err := url.Parse(endpoint)
-	if err != nil {
+func NewClient(endpoint, token string, opts *ClientOpts) (client *Client, err error) {
+	client = new(Client)
+	if client.endpointURL, err = url.Parse(endpoint); err != nil {
 		return nil, fmt.Errorf("invalid API url: %w", err)
 	}
-	endpointURL.Path = path.Join(endpointURL.Path, "bot"+token)
+	client.endpointURL.Path = path.Join(client.endpointURL.Path, "bot"+token)
 
-	var client *http.Client
 	if opts != nil && opts.Client != nil {
-		client = opts.Client
+		client.hc = opts.Client
 	} else {
-		client = http.DefaultClient
+		client.hc = http.DefaultClient
 	}
-
-	return &Client{
-		endpointURL: endpointURL,
-		hc:          client,
-	}, nil
+	return client, nil
 }
 
 func (c *Client) methodURL(method string) string {

@@ -39,6 +39,40 @@ func TestUpdateType_String(t *testing.T) {
 	}
 }
 
+func Test_parseUpdateType(t *testing.T) {
+	tests := []struct {
+		s   string
+		tp  UpdateType
+		bad bool
+	}{
+		{s: "message", tp: UpdateMessage},
+		{s: "edited_message", tp: UpdateEditedMessage},
+		{s: "channel_post", tp: UpdateChannelPost},
+		{s: "edited_channel_post", tp: UpdateEditedChannelPost},
+		{s: "inline_query", tp: UpdateInlineQuery},
+		{s: "chosen_inline_result", tp: UpdateChosenInlineResult},
+		{s: "callback_query", tp: UpdateCallbackQuery},
+		{s: "shipping_query", tp: UpdateShippingQuery},
+		{s: "pre_checkout_query", tp: UpdatePreCheckoutQuery},
+		{s: "poll", tp: UpdatePoll},
+		{s: "poll_answer", tp: UpdatePollAnswer},
+		{s: "my_chat_member", tp: UpdateMyChatMember},
+		{s: "chat_member", tp: UpdateChatMember},
+		{s: "chat_join_request", tp: UpdateChatJoinRequest},
+		{s: "unknown_type", bad: true},
+		{s: "message_unknown", bad: true},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.s, func(t *testing.T) {
+			t.Parallel()
+			got, got1 := parseUpdateType(tt.s)
+			assert.Equal(t, tt.tp, got)
+			assert.Equal(t, !tt.bad, got1)
+		})
+	}
+}
+
 func Test_getUpdatesResponseConsumer(t *testing.T) {
 	type update struct {
 		UpdateInfo
@@ -89,6 +123,11 @@ func Test_getUpdatesResponseConsumer(t *testing.T) {
 				{UpdateInfo: UpdateInfo{ID: 2, Type: UpdateMessage}, Value: `{"text":"testtext"}`},
 				{UpdateInfo: UpdateInfo{ID: 4, Type: UpdatePoll}, Value: `{"id":"pollid"}`},
 			},
+		},
+		{
+			name:    "invalid update end structure",
+			data:    `[{"update_id":1, "message":{"text":"ok"}]`,
+			wantErr: true,
 		},
 	}
 
