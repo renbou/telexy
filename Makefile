@@ -4,7 +4,7 @@ test:
 
 .PHONY: bench
 bench:
-	go test -v -run='^$' -bench=. -benchmem ./...
+	go test -v -run='^$$' -bench=. -benchmem ./...
 
 .PHONY: cover
 cover:

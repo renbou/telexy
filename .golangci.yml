@@ -51,6 +51,11 @@ linters-settings:
     check-exported: false
   gocognit:
     min-complexity: 20
+  wrapcheck:
+    ignoreSigs:
+      - .Errorf(
+      - errors.New(
+      - retry.Recoverable(
 
 issues:
   exclude-rules:
