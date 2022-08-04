@@ -23,7 +23,7 @@ type recoverError struct {
 }
 
 func (e recoverError) Error() string {
-	return fmt.Sprintf("%s: recovering from error: %s", e.msg, e.wrapped.Error())
+	return fmt.Sprintf("recoverable error: %s", e.wrapped.Error())
 }
 
 func (e recoverError) Unwrap() error {
@@ -49,7 +49,7 @@ func Recover(logger tlxlog.Logger, f RecoverFunc, s DelayScheduler) error {
 		}
 
 		delay := s()
-		logger.Info(re.Error(), append(re.kvs, "delay", delay.String())...)
+		logger.Error(re, re.msg, append(re.kvs, "delay", delay)...)
 		time.Sleep(delay)
 	}
 }
