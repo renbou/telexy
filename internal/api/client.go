@@ -66,6 +66,9 @@ func (c *Client) methodURL(method string) string {
 	return v.(string)
 }
 
+// premade request header to avoid allocating a new one each time
+var apiRequestHeader = http.Header{"Content-Type": []string{"application/json"}}
+
 // Do makes a POST request to the API with the specified request and calls the
 // consumer with a decoder ready to read the "result" field of the response.
 func (c *Client) Do(ctx context.Context,
@@ -84,12 +87,14 @@ func (c *Client) Do(ctx context.Context,
 		return fmt.Errorf("preparing http %s request: %w", method, err)
 	}
 
+	req.Header = apiRequestHeader
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		// Unwrap url.Error returned from do to avoid leaking url with bot token
 		return fmt.Errorf("executing http %s request: %w", method, errors.Unwrap(err))
 	} else if resp.StatusCode != http.StatusOK {
-		// TODO: properly handle errors as specified in https://core.telegram.org/api/errors
+		// TODO: properly handle errors as specified in
+		// https://core.telegram.org/api/errors and https://github.com/TelegramBotAPI/errors
 		return fmt.Errorf("bad api response code: %s", resp.Status)
 	}
 

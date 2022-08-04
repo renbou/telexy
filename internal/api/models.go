@@ -1,5 +1,14 @@
 package api
 
+// A single Response from the Telegram Bot API.
+// Doesn't contain fields such as "parameters" since currently they aren't by anything in telexy.
+type Response struct {
+	Ok          bool   `json:"ok,omitempty"`
+	Description string `json:"description,omitempty"`
+	ErrorCode   int    `json:"error_code,omitempty"`
+	Result      any    `json:"result,omitempty"`
+}
+
 // UpdateType is an enum of the possible Telegram Bot API update message contents.
 type UpdateType int
 

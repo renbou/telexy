@@ -44,55 +44,41 @@ func (d Decoder) TokenIs(v any) error {
 	return nil
 }
 
-func decoderWant[T any](what string, d Decoder) (T, error) {
+func decodeType[T any](what string, d Decoder) (T, error) {
 	var v T
-	if t, err := d.Token(); err != nil {
+	if err := d.Decode(&v); err != nil {
 		return v, d.readErr(what, err)
-	} else if v, ok := t.(T); !ok {
-		return v, d.expectedErr(what, t)
 	} else {
 		return v, nil
 	}
 }
 
-func (d Decoder) String() (string, error) {
-	return decoderWant[string]("a string", d)
-}
-
-func (d Decoder) Bool() (bool, error) {
-	return decoderWant[bool]("a boolean", d)
-}
-
-func (d Decoder) number(want string) (json.Number, error) {
-	return decoderWant[json.Number](want, d)
-}
-
-func (d Decoder) Int64() (int64, error) {
-	if n, err := d.number("an int"); err != nil {
-		return 0, err
-	} else if i, err := n.Int64(); err != nil {
-		f, _ := n.Float64()
-		return int64(f), nil
+func (d Decoder) Key() (string, error) {
+	const what = "an object key"
+	if t, err := d.Token(); err != nil {
+		return "", d.readErr(what, err)
+	} else if s, ok := t.(string); !ok {
+		return "", d.expectedErr(what, t)
 	} else {
-		return i, nil
+		return s, nil
 	}
 }
 
+func (d Decoder) String() (string, error) {
+	return decodeType[string]("a string", d)
+}
+
+func (d Decoder) Bool() (bool, error) {
+	return decodeType[bool]("a boolean", d)
+}
+
 func (d Decoder) Int() (int, error) {
-	i64, err := d.Int64()
-	return int(i64), err
+	return decodeType[int]("an int", d)
 }
 
 func newDecoder(d *json.Decoder) Decoder {
 	d.UseNumber()
 	return Decoder{d}
-}
-
-// a short description of a response received from Telegram's API.
-type response struct {
-	Ok          bool   `json:"ok"`
-	Description string `json:"description"`
-	ErrorCode   int    `json:"error_code"`
 }
 
 type responseConsumer func(Decoder) error
@@ -110,9 +96,9 @@ func readResponse(r io.ReadCloser, consumer responseConsumer) error {
 	}
 
 	// Set response's "ok" to true by default in case we encounter "result" first
-	resp := response{Ok: true}
+	resp := Response{Ok: true}
 	for d.More() {
-		key, err := d.String()
+		key, err := d.Key()
 		if err != nil {
 			return fmt.Errorf("expected api response field key: %w", err)
 		} else if len(key) < len("ok") {
@@ -222,7 +208,7 @@ func getUpdatesResponseConsumer(consumer func(UpdateInfo, Decoder) error) respon
 
 			// The only field left should be the actual value, starting with its type as the object key
 			var key string
-			if key, err = d.String(); err != nil {
+			if key, err = d.Key(); err != nil {
 				return fmt.Errorf("expected update type key: %w", err)
 			}
 
