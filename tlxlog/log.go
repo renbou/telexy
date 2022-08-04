@@ -49,8 +49,9 @@ func (s std) Error(err error, msg string, kvs ...interface{}) {
 	var sb strings.Builder
 	sb.WriteString("ERROR: errors=")
 	if err == nil {
-		sb.WriteString("nil")
+		sb.WriteString("nil ")
 	} else {
+		sb.WriteByte('[')
 		first := true
 		for err != nil {
 			if !first {
@@ -59,11 +60,11 @@ func (s std) Error(err error, msg string, kvs ...interface{}) {
 				first = false
 			}
 
-			sb.WriteString(err.Error())
+			sb.WriteString(fmt.Sprintf("%q", err.Error()))
 			err = errors.Unwrap(err)
 		}
+		sb.WriteString("] ")
 	}
-	sb.WriteString("] ")
 	s.format(&sb, msg, kvs...)
 }
 
