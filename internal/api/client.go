@@ -3,13 +3,14 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"path"
 	"sync"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Local pool for JSON request marshalling
@@ -72,13 +73,17 @@ var apiRequestHeader = http.Header{"Content-Type": []string{"application/json"}}
 // Do makes a POST request to the API with the specified request and calls the
 // consumer with a decoder ready to read the "result" field of the response.
 func (c *Client) Do(ctx context.Context,
-	method string, v any, consumer func(Decoder) error,
+	method string, v any, consumer func(*jsoniter.Iterator) error,
 ) error {
 	buffer := getBuffer()
 	defer putBuffer(buffer)
 
-	encoder := json.NewEncoder(buffer)
-	if err := encoder.Encode(v); err != nil {
+	// Make sure to the non-lossy config here... Wouldn't want to lose any data
+	stream := jsoniter.ConfigDefault.BorrowStream(buffer)
+	defer jsoniter.ConfigDefault.ReturnStream(stream)
+
+	stream.WriteVal(v)
+	if err := stream.Flush(); err != nil {
 		return fmt.Errorf("encoding %s request: %w", method, err)
 	}
 
@@ -104,7 +109,7 @@ func (c *Client) Do(ctx context.Context,
 // GetUpdates completes a getUpdates request using the specified options and parses
 // each of the returned updates using the specified consumer.
 func (c *Client) GetUpdates(ctx context.Context,
-	req GetUpdatesRequest, consumer func(UpdateInfo, Decoder) error,
+	req GetUpdatesRequest, consumer func(UpdateInfo, *jsoniter.Iterator) error,
 ) error {
 	return c.Do(ctx, "getUpdates", req, getUpdatesResponseConsumer(consumer))
 }

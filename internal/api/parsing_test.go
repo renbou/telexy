@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -145,19 +146,20 @@ func Test_getUpdatesResponseConsumer(t *testing.T) {
 			req := require.New(t)
 
 			var updates []update
-			consumer := getUpdatesResponseConsumer(func(ui UpdateInfo, d Decoder) error {
+			consumer := getUpdatesResponseConsumer(func(ui UpdateInfo, it *jsoniter.Iterator) error {
 				var m json.RawMessage
-				if err := d.Decode(&m); err != nil {
-					return err
+				if it.ReadVal(&m); it.Error != nil {
+					return it.Error
 				}
 				updates = append(updates, update{UpdateInfo: ui, Value: string(m)})
 				return nil
 			})
 
 			r := strings.NewReader(tt.data)
-			d := newDecoder(json.NewDecoder(r))
+			it := borrowIterator(r)
+			defer returnIterator(it)
 
-			err := consumer(d)
+			err := consumer(it)
 			if tt.wantErr {
 				req.Error(err)
 			} else {

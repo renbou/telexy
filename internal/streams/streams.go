@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/renbou/telexy/internal/api"
 )
 
@@ -27,10 +28,10 @@ type Streamer[T any] interface {
 
 // UpdateDecoder is a type commonly used by the default streamers for stream-like parsing of the incoming
 // updates, which allows to reduce memory allocations and the CPU overhead of constantly copying values
-type UpdateDecoder[T any] func(api.UpdateInfo, api.Decoder) (T, error)
+type UpdateDecoder[T any] func(api.UpdateInfo, *jsoniter.Iterator) (T, error)
 
 // TgBotAPIDecoder is an UpdateDecoder which decodes updates to the format of the tgbotapi package.
-func TgBotAPIDecoder(info api.UpdateInfo, d api.Decoder) (tgbotapi.Update, error) {
+func TgBotAPIDecoder(info api.UpdateInfo, it *jsoniter.Iterator) (tgbotapi.Update, error) {
 	update := tgbotapi.Update{UpdateID: info.ID}
 
 	// This might seem bulky but is a whole lot faster than decoding via reflection
@@ -70,8 +71,8 @@ func TgBotAPIDecoder(info api.UpdateInfo, d api.Decoder) (tgbotapi.Update, error
 		)
 	}
 
-	if err := d.Decode(where); err != nil {
-		return tgbotapi.Update{}, fmt.Errorf("decoding tgbotapi update: %w", err)
+	if it.ReadVal(where); it.Error != nil {
+		return tgbotapi.Update{}, fmt.Errorf("decoding tgbotapi update: %w", it.Error)
 	}
 	return update, nil
 }

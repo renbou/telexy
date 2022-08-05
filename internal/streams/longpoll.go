@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/renbou/telexy/internal/api"
 	"github.com/renbou/telexy/internal/retry"
 	"github.com/renbou/telexy/tlxlog"
@@ -40,8 +41,8 @@ func (s *longPollStreamer[T]) poll(ctx context.Context, offset int, stream chan 
 			Offset:  newOffset,
 			Limit:   s.Limit,
 			Timeout: int(s.Timeout.Seconds()),
-		}, func(ui api.UpdateInfo, d api.Decoder) error {
-			t, err := s.parser(ui, d)
+		}, func(ui api.UpdateInfo, it *jsoniter.Iterator) error {
+			t, err := s.parser(ui, it)
 			if err != nil {
 				return err
 			}
@@ -57,7 +58,7 @@ func (s *longPollStreamer[T]) poll(ctx context.Context, offset int, stream chan 
 		})
 
 		// Everything went fine or the request/global context has timed out, lets end this attempt
-		if err == nil || errors.Is(err, context.DeadlineExceeded) {
+		if err == nil || ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) {
 			return nil
 		}
 		// Always try to recover in hope of being able to get some updates...

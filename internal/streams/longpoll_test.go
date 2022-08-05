@@ -3,7 +3,6 @@ package streams
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,13 +12,14 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/renbou/telexy/internal/api"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/telebot.v3"
 )
 
 func encodeTestAPIResponse(data any) ([]byte, error) {
-	b, err := json.Marshal(api.Response{Ok: true, Result: data})
+	b, err := jsoniter.Marshal(api.Response{Ok: true, Result: data})
 	if err != nil {
 		return nil, fmt.Errorf("marshaling api response: %w", err)
 	}
@@ -64,19 +64,20 @@ func (rt *longPollTestRoundTripper) RoundTrip(req *http.Request) (*http.Response
 	return response(rt.data[cur]), nil
 }
 
+// bNumReqs returns the number of batches of requests and number of requests in each batch
+func bNumReqs(b *testing.B) (int, int) {
+	return b.N, DefaultLongPollLimit
+}
+
 func newLongPollTestClient(b *testing.B) *http.Client {
 	b.Helper()
-	data := make([]*bytes.Reader, (b.N+DefaultLongPollLimit-1)/DefaultLongPollLimit)
+	n, by := bNumReqs(b)
+	data := make([]*bytes.Reader, n)
 	for i := range data {
-		n := DefaultLongPollLimit
-		if (i+1)*n > b.N {
-			n = b.N - i*n
-		}
-
-		updates := make([]telebot.Update, n)
+		updates := make([]telebot.Update, by)
 		for j := range updates {
 			updates[j] = telebot.Update{
-				ID:      i*DefaultLongPollLimit + j,
+				ID:      i*by + j,
 				Message: &telebot.Message{Text: "long polling text"},
 			}
 		}
@@ -93,7 +94,8 @@ func newLongPollTestClient(b *testing.B) *http.Client {
 
 func longPollTestValidate(b *testing.B, stop func(), s Stream[tgbotapi.Update]) {
 	b.Helper()
-	cnt, end := 0, b.N
+	n, by := bNumReqs(b)
+	cnt, end := 0, n*by
 	for range s {
 		cnt++
 		if cnt > end {
@@ -107,19 +109,19 @@ func longPollTestValidate(b *testing.B, stop func(), s Stream[tgbotapi.Update]) 
 
 // Benchmark of simple long polling using a single goroutine receiving messages and decoding them
 func BenchmarkNaiveLongPoll(b *testing.B) {
-	b.StopTimer()
-	b.Logf("Decoding %d messages", b.N)
+	n, by := bNumReqs(b)
+	b.Logf("Decoding %d requests by %d messages", n, by)
 	api, err := tgbotapi.NewBotAPIWithClient("faketoken", tgbotapi.APIEndpoint, newLongPollTestClient(b))
 	require.NoError(b, err)
 
-	b.StartTimer()
+	b.ResetTimer()
 	stream := api.GetUpdatesChan(tgbotapi.UpdateConfig{})
 	longPollTestValidate(b, api.StopReceivingUpdates, Stream[tgbotapi.Update](stream))
 }
 
 func BenchmarkOptimizedLongPoll(b *testing.B) {
-	b.StopTimer()
-	b.Logf("Decoding %d messages", b.N)
+	n, by := bNumReqs(b)
+	b.Logf("Decoding %d requests by %d messages", n, by)
 	client, err := api.NewClient(telebot.DefaultApiURL, "faketoken", &api.ClientOpts{
 		Client: newLongPollTestClient(b),
 	})
@@ -127,7 +129,7 @@ func BenchmarkOptimizedLongPoll(b *testing.B) {
 	streamer := NewLongPollStreamer(client, TgBotAPIDecoder, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	b.StartTimer()
+	b.ResetTimer()
 	stream, errstream := streamer.Stream(ctx)
 	longPollTestValidate(b, cancel, stream)
 	select {

@@ -1,87 +1,39 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"reflect"
+	"sync"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
-// ignoreJSON is a struct which can be passed into json decoding functions
-// to simply ignore the content. This is better than using json.RawMessage
-// because it does not do any copying.
-type ignoreJSON struct{}
+// Default size of jsoniter decoding buffer - 256 Kb
+const DefaultDecodeBufferSize = 256 << 10
 
-func (ignoreJSON) UnmarshalJSON([]byte) error {
-	return nil
+// Custom iterator pool which preallocates a single buffer to be used by all later operations
+var iteratorPool = sync.Pool{
+	New: func() any {
+		// Maybe switch to ConfigDefault if issues ever arise
+		return jsoniter.Parse(jsoniter.ConfigFastest, nil, DefaultDecodeBufferSize)
+	},
 }
 
-// Decoder is a wrapper around json.Decoder to simplify usage
-// of the streaming API by providing helpers for token and type matching.
-type Decoder struct {
-	*json.Decoder
+func borrowIterator(r io.Reader) *jsoniter.Iterator {
+	it := iteratorPool.Get().(*jsoniter.Iterator)
+	it.Reset(r)
+	return it
 }
 
-func (d Decoder) readErr(what any, err error) error {
-	return fmt.Errorf("reading %v from json: %w", what, err)
+func returnIterator(it *jsoniter.Iterator) {
+	// Avoid keeping any references
+	it.Error = nil
+	it.Attachment = nil
+	it.Reset(nil)
+	iteratorPool.Put(it)
 }
 
-func (d Decoder) expectedErr(what, got any) error {
-	return fmt.Errorf("expected %v but got %v (%s)", what, got, reflect.TypeOf(got).String())
-}
-
-func (d Decoder) Skip() {
-	var ignore ignoreJSON
-	_ = d.Decode(&ignore)
-}
-
-func (d Decoder) TokenIs(v any) error {
-	if t, err := d.Token(); err != nil {
-		return d.readErr(v, err)
-	} else if t != v {
-		return d.expectedErr(v, t)
-	}
-	return nil
-}
-
-func decodeType[T any](what string, d Decoder) (T, error) {
-	var v T
-	if err := d.Decode(&v); err != nil {
-		return v, d.readErr(what, err)
-	} else {
-		return v, nil
-	}
-}
-
-func (d Decoder) Key() (string, error) {
-	const what = "an object key"
-	if t, err := d.Token(); err != nil {
-		return "", d.readErr(what, err)
-	} else if s, ok := t.(string); !ok {
-		return "", d.expectedErr(what, t)
-	} else {
-		return s, nil
-	}
-}
-
-func (d Decoder) String() (string, error) {
-	return decodeType[string]("a string", d)
-}
-
-func (d Decoder) Bool() (bool, error) {
-	return decodeType[bool]("a boolean", d)
-}
-
-func (d Decoder) Int() (int, error) {
-	return decodeType[int]("an int", d)
-}
-
-func newDecoder(d *json.Decoder) Decoder {
-	d.UseNumber()
-	return Decoder{d}
-}
-
-type responseConsumer func(Decoder) error
+type responseConsumer func(*jsoniter.Iterator) error
 
 // readResponse reads a single API response from the reader and calls the consumer
 // once the response metadata has been read and validated ("ok", "description", etc).
@@ -89,49 +41,42 @@ type responseConsumer func(Decoder) error
 // stream decoding API without leaving the possibility of an unclosed reader.
 func readResponse(r io.ReadCloser, consumer responseConsumer) error {
 	defer r.Close()
-	d := newDecoder(json.NewDecoder(r))
+	it := borrowIterator(r)
+	defer returnIterator(it)
 
-	if err := d.TokenIs(json.Delim('{')); err != nil {
-		return err
-	}
-
-	// Set response's "ok" to true by default in case we encounter "result" first
-	resp := Response{Ok: true}
-	for d.More() {
-		key, err := d.Key()
-		if err != nil {
-			return fmt.Errorf("expected api response field key: %w", err)
-		} else if len(key) < len("ok") {
-			// Ignore invalid and possibly unknown fields
+	var resp Response
+	for key := it.ReadObject(); key != "" && it.Error == nil; key = it.ReadObject() {
+		// Ignore invalid and possibly unknown fields
+		if len(key) < len("ok") {
 			continue
 		}
 
 		// Check if we received a result, cause if we did, then "ok" *should* be true
 		// and we can go right ahead with reading the result
 		if key[0] == 'r' {
+			resp.Ok = true
 			break
 		}
 
 		// Parse known fields while relying on their correctness and skip unknown ones
 		switch key[0] {
 		case 'o': // ok
-			resp.Ok, err = d.Bool()
+			resp.Ok = it.ReadBool()
 		case 'd': // description
-			resp.Description, err = d.String()
+			resp.Description = it.ReadString()
 		case 'e': // error_code
-			resp.ErrorCode, err = d.Int()
+			resp.ErrorCode = it.ReadInt()
 		default:
-			d.Skip()
-		}
-		if err != nil {
-			return fmt.Errorf("expected api response field value: %w", err)
+			it.Skip()
 		}
 	}
 
-	if !resp.Ok {
+	if it.Error != nil {
+		return fmt.Errorf("parsing telegram api response: %w", it.Error)
+	} else if !resp.Ok {
 		return fmt.Errorf("non-ok telegram api response: %q (code %d)", resp.Description, resp.ErrorCode)
 	}
-	return consumer(d)
+	return consumer(it)
 }
 
 // parseUpdateType parses the update type string by looking at the minimum amount
@@ -191,39 +136,44 @@ func parseUpdateType(s string) (UpdateType, bool) {
 // getUpdatesResponseConsumer returns a consumer for reading a getUpdates response
 // using the given update consumer. It calls the consumer once for each update encountered
 // in the getUpdates response.
-func getUpdatesResponseConsumer(consumer func(UpdateInfo, Decoder) error) responseConsumer {
-	return func(d Decoder) (err error) {
-		for err = d.TokenIs(json.Delim('[')); d.More() && err == nil; err = d.TokenIs(json.Delim('}')) {
-			// We currently rely on the update id being the first field in an update
-			if err = d.TokenIs(json.Delim('{')); err != nil {
-				return err
-			} else if err = d.TokenIs("update_id"); err != nil {
-				return fmt.Errorf("expected update_id to be the first field: %w", err)
+func getUpdatesResponseConsumer(consumer func(UpdateInfo, *jsoniter.Iterator) error) responseConsumer {
+	return func(it *jsoniter.Iterator) error {
+		for it.ReadArray() && it.Error == nil {
+			// TODO: allow keys in any order (e.g. if update_id comes first, then we parse can pass
+			// it to the long poller or smth else straight away, otherwise we read the value and then
+			// pass the update_id)
+			if key := it.ReadObject(); key != "update_id" {
+				if it.Error == nil {
+					return fmt.Errorf("expected update_id as the first field, but got: %q", key)
+				}
+				break
 			}
-
-			var info UpdateInfo
-			if info.ID, err = d.Int(); err != nil {
-				return fmt.Errorf("invalid value specified as update_id: %w", err)
-			}
-
-			// The only field left should be the actual value, starting with its type as the object key
-			var key string
-			if key, err = d.Key(); err != nil {
-				return fmt.Errorf("expected update type key: %w", err)
+			info := UpdateInfo{
+				ID: it.ReadInt(),
 			}
 
 			var ok bool
-			if info.Type, ok = parseUpdateType(key); !ok {
+			if info.Type, ok = parseUpdateType(it.ReadObject()); ok {
+				// Let the consumer take the value
+				if err := consumer(info, it); err != nil {
+					return err
+				}
+			} else {
 				// Ignore unknown updates
-				d.Skip()
-				continue
+				it.Skip()
 			}
 
-			// Finally let the consumer take the value
-			if err = consumer(info, d); err != nil {
-				return err
+			if key := it.ReadObject(); key != "" {
+				if it.Error == nil {
+					return fmt.Errorf("getUpdates contains excess field: %q", key)
+				}
+				break
 			}
 		}
-		return err
+
+		if it.Error != nil {
+			return fmt.Errorf("parsing getUpdates response: %w", it.Error)
+		}
+		return nil
 	}
 }
