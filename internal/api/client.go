@@ -78,7 +78,7 @@ func (c *Client) Do(ctx context.Context,
 	buffer := getBuffer()
 	defer putBuffer(buffer)
 
-	// Make sure to the non-lossy config here... Wouldn't want to lose any data
+	// Make sure to use the non-lossy config here... Wouldn't want to lose any data
 	stream := jsoniter.ConfigDefault.BorrowStream(buffer)
 	defer jsoniter.ConfigDefault.ReturnStream(stream)
 

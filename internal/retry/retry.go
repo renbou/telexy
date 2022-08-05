@@ -49,7 +49,7 @@ func Recover(logger tlxlog.Logger, f RecoverFunc, s DelayScheduler) error {
 		}
 
 		delay := s()
-		logger.Error(re, re.msg, append(re.kvs, "delay", delay)...)
+		logger.Error(re, re.msg, append(re.kvs, "delay", delay.String())...)
 		time.Sleep(delay)
 	}
 }

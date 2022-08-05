@@ -37,10 +37,10 @@ type std struct{}
 func (s std) format(sb *strings.Builder, msg string, kvs ...interface{}) {
 	sb.WriteString(fmt.Sprintf("msg=%q", msg))
 	for i := 0; i < len(kvs)-1; i += 2 {
-		sb.WriteString(fmt.Sprintf(" %v=%+v", kvs[i], kvs[i+1]))
+		sb.WriteString(fmt.Sprintf(" %v=%#v", kvs[i], kvs[i+1]))
 	}
 	if len(kvs)%2 == 1 {
-		sb.WriteString(fmt.Sprintf(" %+v", kvs[len(kvs)-1]))
+		sb.WriteString(fmt.Sprintf(" %#v", kvs[len(kvs)-1]))
 	}
 	log.Println(sb.String())
 }

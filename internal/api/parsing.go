@@ -142,11 +142,10 @@ func getUpdatesResponseConsumer(consumer func(UpdateInfo, *jsoniter.Iterator) er
 			// TODO: allow keys in any order (e.g. if update_id comes first, then we parse can pass
 			// it to the long poller or smth else straight away, otherwise we read the value and then
 			// pass the update_id)
-			if key := it.ReadObject(); key != "update_id" {
-				if it.Error == nil {
-					return fmt.Errorf("expected update_id as the first field, but got: %q", key)
-				}
+			if key := it.ReadObject(); it.Error != nil {
 				break
+			} else if key != "update_id" {
+				return fmt.Errorf("expected update_id as the first field, but got: %q", key)
 			}
 			info := UpdateInfo{
 				ID: it.ReadInt(),
@@ -155,19 +154,16 @@ func getUpdatesResponseConsumer(consumer func(UpdateInfo, *jsoniter.Iterator) er
 			var ok bool
 			if info.Type, ok = parseUpdateType(it.ReadObject()); ok {
 				// Let the consumer take the value
-				if err := consumer(info, it); err != nil {
-					return err
-				}
+				it.Error = consumer(info, it)
 			} else {
 				// Ignore unknown updates
 				it.Skip()
 			}
 
-			if key := it.ReadObject(); key != "" {
-				if it.Error == nil {
-					return fmt.Errorf("getUpdates contains excess field: %q", key)
-				}
+			if key := it.ReadObject(); it.Error != nil {
 				break
+			} else if key != "" {
+				return fmt.Errorf("getUpdates response contains excess field: %q", key)
 			}
 		}
 

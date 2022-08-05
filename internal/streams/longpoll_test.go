@@ -66,6 +66,7 @@ func (rt *longPollTestRoundTripper) RoundTrip(req *http.Request) (*http.Response
 
 // bNumReqs returns the number of batches of requests and number of requests in each batch
 func bNumReqs(b *testing.B) (int, int) {
+	b.Helper()
 	return b.N, DefaultLongPollLimit
 }
 
