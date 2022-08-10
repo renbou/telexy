@@ -74,7 +74,7 @@ func (s *longPollStreamer[T]) poll(ctx context.Context, offset int, stream chan 
 	return newOffset, err
 }
 
-func (s *longPollStreamer[T]) Stream(ctx context.Context) (Stream[T], ErrStream) {
+func (s *longPollStreamer[T]) Stream(ctx context.Context) (Stream[T], Stream[error]) {
 	stream, errStream := make(chan T, s.Limit), make(chan error, 1)
 	go func() {
 		defer close(stream)
@@ -104,10 +104,10 @@ func NewLongPollStreamer[T any](client *api.Client, parser UpdateDecoder[T], opt
 	if opts == nil {
 		opts = &LongPollOptions{}
 	}
-	if opts.Limit == 0 {
+	if opts.Limit < 1 {
 		opts.Limit = DefaultLongPollLimit
 	}
-	if opts.Timeout == 0 {
+	if opts.Timeout < 1 {
 		opts.Timeout = DefaultLongPollTimeout
 	}
 	opts.Logger = tlxlog.WithDefault(opts.Logger)

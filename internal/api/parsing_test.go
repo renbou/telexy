@@ -8,7 +8,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/goleak"
 )
 
 func TestUpdateType_String(t *testing.T) {
@@ -168,8 +167,4 @@ func Test_getUpdatesResponseConsumer(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
 }

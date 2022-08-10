@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -9,26 +10,47 @@ import (
 	"github.com/renbou/telexy/internal/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 )
 
-// streamIs validates that a stream outputs values equal to the ones wanted in the specified order
-func streamIs[T any](req *require.Assertions, s Stream[T], want []T) {
-	n := 0
-	req.Eventually(func() bool {
-		select {
-		case val, ok := <-s:
-			if !ok {
-				req.Equal(len(want), n, "not all wanted values found on stream")
-				return true
+// streamContains validates that a stream contains the wanted values in any order
+func streamContains[T any](req *require.Assertions, s Stream[T], want []T, doneFunc func()) {
+	got := make([]bool, len(want))
+	done := func() bool {
+		for _, v := range got {
+			if !v {
+				return false
 			}
-
-			req.Less(n, len(want), "got more values than wanted on stream")
-			req.Equal(want[n], val)
-			n++
-		default:
 		}
-		return false
-	}, time.Second*5, time.Millisecond*50)
+		return true
+	}
+
+	req.Eventually(func() bool {
+		for {
+			select {
+			case val, ok := <-s:
+				if !ok {
+					req.True(done(), "not all wanted values found on stream")
+					return true
+				}
+
+				var foundUnused bool
+				for i, v := range got {
+					if !v && reflect.DeepEqual(want[i], val) {
+						got[i], foundUnused = true, true
+						break
+					}
+				}
+				req.True(foundUnused, "redundant value found on stream: %+v", val)
+
+				if done() {
+					doneFunc()
+				}
+			default:
+				return false
+			}
+		}
+	}, time.Second*30, time.Millisecond*50)
 }
 
 func TestTgBotAPIDecoder(t *testing.T) {
@@ -272,9 +294,13 @@ func TestTgBotAPIDecoder(t *testing.T) {
 			it := jsoniter.ConfigFastest.BorrowIterator([]byte(tt.data))
 			defer jsoniter.ConfigFastest.ReturnIterator(it)
 
-			got, err := TgBotAPIDecoder(tt.info, it)
+			got, err := AsTgBotAPI(tt.info, it)
 			tt.assertion(t, err)
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 }

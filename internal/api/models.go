@@ -30,7 +30,6 @@ const (
 	UpdateChatJoinRequest                      // chat_join_request
 )
 
-// UpdateInfo contains info about a received request.
 type UpdateInfo struct {
 	ID   int
 	Type UpdateType

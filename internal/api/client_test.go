@@ -9,15 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const benchmarkSeed = 0x13337
-
 var benchmarkCommonMethods = [...]string{"getUpdates", "sendMessage", "sendSticker", "setMyCommands", "getMe"}
 
 func benchmarkPickMethods(n int) []string {
-	rand.Seed(benchmarkSeed)
+	rnd := rand.New(rand.NewSource(0))
 	methods := make([]string, n)
 	for i := range methods {
-		methods[i] = benchmarkCommonMethods[rand.Intn(len(benchmarkCommonMethods))]
+		methods[i] = benchmarkCommonMethods[rnd.Intn(len(benchmarkCommonMethods))]
 	}
 	return methods
 }

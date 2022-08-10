@@ -110,8 +110,6 @@ func longPollTestValidate(b *testing.B, stop func(), s Stream[tgbotapi.Update]) 
 
 // Benchmark of simple long polling using a single goroutine receiving messages and decoding them
 func BenchmarkNaiveLongPoll(b *testing.B) {
-	n, by := bNumReqs(b)
-	b.Logf("Decoding %d requests by %d messages", n, by)
 	api, err := tgbotapi.NewBotAPIWithClient("faketoken", tgbotapi.APIEndpoint, newLongPollTestClient(b))
 	require.NoError(b, err)
 
@@ -121,13 +119,11 @@ func BenchmarkNaiveLongPoll(b *testing.B) {
 }
 
 func BenchmarkOptimizedLongPoll(b *testing.B) {
-	n, by := bNumReqs(b)
-	b.Logf("Decoding %d requests by %d messages", n, by)
 	client, err := api.NewClient(telebot.DefaultApiURL, "faketoken", &api.ClientOpts{
 		Client: newLongPollTestClient(b),
 	})
 	require.NoError(b, err)
-	streamer := NewLongPollStreamer(client, TgBotAPIDecoder, nil)
+	streamer := NewLongPollStreamer(client, AsTgBotAPI, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	b.ResetTimer()
