@@ -15,45 +15,42 @@ import (
 
 // streamContains validates that a stream contains the wanted values in any order
 func streamContains[T any](req *require.Assertions, s Stream[T], want []T, doneFunc func()) {
-	got := make([]bool, len(want))
-	done := func() bool {
-		for _, v := range got {
-			if !v {
-				return false
-			}
-		}
-		return true
-	}
+	got, gotN := make([]bool, len(want)), 0
 
+	var val T
+	var ok bool
 	req.Eventually(func() bool {
 		for {
 			select {
-			case val, ok := <-s:
-				if !ok {
-					req.True(done(), "not all wanted values found on stream")
-					return true
-				}
-
-				var foundUnused bool
-				for i, v := range got {
-					if !v && reflect.DeepEqual(want[i], val) {
-						got[i], foundUnused = true, true
-						break
-					}
-				}
-				req.True(foundUnused, "redundant value found on stream: %+v", val)
-
-				if done() {
-					doneFunc()
-				}
+			case val, ok = <-s:
 			default:
 				return false
+			}
+
+			if !ok {
+				req.Equal(len(want), gotN, "not all wanted values found on stream")
+				return true
+			}
+
+			var foundUnused bool
+			for i, v := range got {
+				if !v && reflect.DeepEqual(want[i], val) {
+					got[i], foundUnused = true, true
+					gotN++
+					break
+				}
+			}
+
+			req.True(foundUnused, "redundant value found on stream: %+v", val)
+			if len(want) == gotN {
+				doneFunc()
 			}
 		}
 	}, time.Second*30, time.Millisecond*50)
 }
 
 func TestTgBotAPIDecoder(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		info      api.UpdateInfo
 		data      string

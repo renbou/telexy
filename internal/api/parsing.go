@@ -39,8 +39,7 @@ type responseConsumer func(*jsoniter.Iterator) error
 // once the response metadata has been read and validated ("ok", "description", etc).
 // The approach of passing a consumer via args was chosen in order to leverage the JSON
 // stream decoding API without leaving the possibility of an unclosed reader.
-func readResponse(r io.ReadCloser, consumer responseConsumer) error {
-	defer r.Close()
+func readResponse(r io.Reader, consumer responseConsumer) error {
 	it := borrowIterator(r)
 	defer returnIterator(it)
 

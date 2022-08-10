@@ -108,15 +108,11 @@ func (m *Mux) Subscribe(opts SubscriptionOpts) (any, Stream[Update]) {
 // will be removed automatically once the mux' incoming update stream is closed.
 // Calling Unsubscribe twice on the same key will panic.
 func (m *Mux) Unsubscribe(key any) {
-	var sub *subscriberDesc
-	if val, ok := m.subs.Load(key); !ok {
-		return
-	} else {
-		sub = val.(*subscriberDesc)
+	if val, ok := m.subs.Load(key); ok {
+		sub := val.(*subscriberDesc)
+		// Notify the workers, they'll close the subscriber as soon as possible
+		close(sub.done)
 	}
-
-	// Notify the workers, they'll close the subscriber as soon as possible
-	close(sub.done)
 }
 
 type muxSubID uint64

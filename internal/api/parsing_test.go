@@ -11,6 +11,7 @@ import (
 )
 
 func TestUpdateType_String(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		s string
 		u UpdateType
@@ -42,6 +43,7 @@ func TestUpdateType_String(t *testing.T) {
 }
 
 func Test_parseUpdateType(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		s   string
 		tp  UpdateType
@@ -76,6 +78,7 @@ func Test_parseUpdateType(t *testing.T) {
 }
 
 func Test_getUpdatesResponseConsumer(t *testing.T) {
+	t.Parallel()
 	type update struct {
 		UpdateInfo
 		Value string

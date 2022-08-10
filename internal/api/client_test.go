@@ -53,6 +53,7 @@ func BenchmarkClient_methodURLNaive(b *testing.B) {
 }
 
 func TestNewClient(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		endpoint   string

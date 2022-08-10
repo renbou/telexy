@@ -97,7 +97,10 @@ func (c *Client) Do(ctx context.Context,
 	if err != nil {
 		// Unwrap url.Error returned from do to avoid leaking url with bot token
 		return fmt.Errorf("executing http %s request: %w", method, errors.Unwrap(err))
-	} else if resp.StatusCode != http.StatusOK {
+	}
+
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
 		// TODO: properly handle errors as specified in
 		// https://core.telegram.org/api/errors and https://github.com/TelegramBotAPI/errors
 		return fmt.Errorf("bad api response code: %s", resp.Status)
